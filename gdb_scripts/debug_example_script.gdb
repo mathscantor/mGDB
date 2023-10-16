@@ -9,18 +9,18 @@ set cwd .
 source gdb_scripts/py_commands/strlen.py
 source gdb_scripts/py_commands/get_base_addr.py
 source gdb_scripts/py_commands/load_library_symbol.py
-source gdb_scripts/py_commands/step_into.py
+source gdb_scripts/py_commands/n_step_into.py
 source gdb_scripts/py_commands/json_get_value_from_key.py
 
 load_library_symbol /usr/lib/x86_64-linux-gnu libc.so.6
 
-get_base_addr test
-printf "base addr: %p\n", $get_base_addr_ret
+get_base_addr ./test_binaries/test
+printf "base addr of test: %p\n", $get_base_addr_ret
 
 b func_1
 commands
   silent
-  step_into 3
+  n_step_into 3
   continue
 end
 

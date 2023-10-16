@@ -28,8 +28,8 @@ class GetBaseAddr(gdb.Command):
 
     def __usage(self) -> None:
         self.__messenger.print_message(Severity.INFO, "Example usage of {}:".format(self.__command_name))
-        print("Template: {} {}".format(self.__command_name, "<library_name>"))
-        print("Eg. {} {}".format(self.__command_name, "example_lib.so"))
+        print("Template: {} {}".format(self.__command_name, "<binary_path>"))
+        print("Eg. {} {}".format(self.__command_name, "/usr/lib/example_lib.so"))
         print("    - command name: {}".format(self.__command_name))
         print("    - number of arguments: {}".format(self.__num_args))
         print("    - ret variable in gdb: {}".format(self.__ret_variable_gdb))
@@ -54,19 +54,19 @@ class GetBaseAddr(gdb.Command):
             self.__usage()
             return
 
-        binary_name = arg_tokens[0]
-        output = gdb.execute("info proc mappings", to_string=True)
+        binary_path = arg_tokens[0]
         mappings = gdb.execute("info proc mappings", to_string=True).split("\n")[4:]
         for mapping in mappings:
             tokens = re.split(r"\s+", mapping.strip())
             if len(tokens) != 6:
                 continue
-            if binary_name == os.path.basename(tokens[5]):
-                self.__messenger.print_message(Severity.INFO, "Found base address of {}!".format(binary_name))
+
+            if os.path.abspath(binary_path) == tokens[5].strip():
+                self.__messenger.print_message(Severity.INFO, "Found base address of {}: {}".format(binary_path, tokens[0]))
                 gdb.execute("set {} = {}".format(self.__ret_variable_gdb, tokens[0]))
                 return
 
-        self.__messenger.print_message(Severity.ERROR, "Unable to get base address of {}!\n".format(binary_name))
+        self.__messenger.print_message(Severity.ERROR, "Unable to get base address of {}!\n".format(binary_path))
         gdb.execute("set {} = 0x0".format(self.__ret_variable_gdb))
         return
 

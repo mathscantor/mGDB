@@ -1,13 +1,12 @@
 import gdb
 import os
 import sys
-import re
 from typing import *
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils.messenger import Severity, Messenger
 
 
-class StepInto(gdb.Command):
+class Template(gdb.Command):
 
     def __init__(self):
 
@@ -17,33 +16,19 @@ class StepInto(gdb.Command):
             2. self.__num_args
             3. self.__ret_variable_gdb
         """
-        self.__command_name = "step_into"
+        self.__command_name = "template"
         self.__num_args = 1
         self.__ret_variable_gdb = "${}_ret".format(self.__command_name)
 
         self.__messenger = Messenger()
-        super(StepInto, self).__init__(self.__command_name, gdb.COMMAND_USER)
+        super(Template, self).__init__(self.__command_name, gdb.COMMAND_USER)
         self.__usage()
-        self.__file_path_regex = re.compile(r'".*"')
-
-        # Attempted to suppress ugly output from si but failed
-        # output = gdb.execute("show logging", to_string=True)
-        # self.__current_logging_file = ""
-        # for line in output.split("\n"):
-        #     logging_option_breakdown = [token.strip() for token in line.split(":")]
-        #     if len(logging_option_breakdown) == 2 and logging_option_breakdown[0] == "logging file":
-        #         match = self.__file_path_regex.search(logging_option_breakdown[1])
-        #         if match:
-        #             self.__current_logging_file = match.group(0)
-        #             break
         return
 
     def __usage(self) -> None:
         self.__messenger.print_message(Severity.INFO, "Example usage of {}:".format(self.__command_name))
-        print("Template: {} {}".format(self.__command_name, "<number of step-into instructions>"))
-        print("Eg. {} {}".format(self.__command_name, "$num_steps"))
-        print("Eg. {} {}".format(self.__command_name, "0x16"))
-        print("Eg. {} {}".format(self.__command_name, "1000"))
+        print("Template: {} {}".format(self.__command_name, "<variable or number>"))
+        print("Eg. {} {}".format(self.__command_name, "$var"))
         print("    - command name: {}".format(self.__command_name))
         print("    - number of arguments: {}".format(self.__num_args))
         print("    - ret variable in gdb: {}".format(self.__ret_variable_gdb))
@@ -66,33 +51,29 @@ class StepInto(gdb.Command):
         arg_tokens = [arg.strip() for arg in args.split()]
         if not self.__check_arguments(arg_tokens):
             self.__usage()
+            gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
             return
 
-        num_steps = 0
+        number = 0x0
         # if the argument passed in is a gdb variable
         if arg_tokens[0].startswith("$"):
             value = str(gdb.parse_and_eval(arg_tokens[0]))
             if value.startswith("0x"):
-                num_steps = int(value.split()[0], base=16)
+                number = int(value.split()[0], base=16)
             else:
-                num_steps = int(value.split()[0], base=10)
+                number = int(value.split()[0], base=10)
 
-        # if the argument passed in is a hexadecimal address
+        # if the argument passed in is hexadecimal format
         elif arg_tokens[0].startswith("0x"):
-            num_steps = int(arg_tokens[0], base=16)
+            number = int(arg_tokens[0], base=16)
 
-        # if the argument passed in is a decimal address
+        # if the argument passed in is decimal format
         else:
-            num_steps = int(arg_tokens[0], base=10)
+            number = int(arg_tokens[0], base=10)
 
-        self.__messenger.print_message(Severity.INFO, "Stepping into {} instructions...".format(num_steps))
-        for i in range(num_steps):
-            # gdb's redirection is bugged lol
-            gdb.execute("stepi", to_string=True)
-            gdb.execute("x/i $pc")
-        gdb.execute("continue")
+        self.__messenger.print_message("Received Argument value: {}".format(number))
         gdb.execute("set {} = 0".format(self.__ret_variable_gdb))
         return
 
 
-StepInto()
+Template()

@@ -57,11 +57,8 @@ class GetBaseAddr(gdb.Command):
         binary_path = arg_tokens[0]
         mappings = gdb.execute("info proc mappings", to_string=True).split("\n")[4:]
         for mapping in mappings:
-            tokens = re.split(r"\s+", mapping.strip())
-            if len(tokens) != 6:
-                continue
-
-            if os.path.abspath(binary_path) == tokens[5].strip():
+            if os.path.abspath(binary_path) in mapping:
+                tokens = re.split(r"\s+", mapping.strip())
                 self.__messenger.print_message(Severity.INFO, "Found base address of {}: {}".format(binary_path, tokens[0]))
                 gdb.execute("set {} = {}".format(self.__ret_variable_gdb, tokens[0]))
                 return

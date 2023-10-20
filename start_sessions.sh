@@ -32,8 +32,10 @@ function pretty_print_status {
 }
 
 function run_multiple_gdb_scripts {
+
 	for pid in "${target_process_pids[@]}"; do
-	  $GDB_PATH --batch --command=$GDB_SCRIPT -p $pid > $LOGS_DIR/gdb_output/$pid.log 2>&1 &
+	  process_name=$(ps -p "$pid" -o comm=)
+	  $GDB_PATH --batch --command=$GDB_SCRIPT -p $pid > $LOGS_DIR/gdb_output/"$pid"_"$process_name".log 2>&1 &
 
 # This command does not highlight the Severity of the message with their respective colours.
 #    $GDB_PATH --batch \
@@ -47,7 +49,6 @@ function run_multiple_gdb_scripts {
 			echo -e "$ERROR Error in attaching gdb to $PROCESS_NAME($pid)"
 		else
 			gdb_pids+=("${gdb_pid}")
-			process_name=$(ps -p "$pid" -o comm=)
 			target_process_names+=("${process_name}")
 		fi
 	done
@@ -177,11 +178,13 @@ function is_numeric {
 }
 
 function usage {
-    echo "Usage: $0 [ -h ] ( -n | -l ) -s"
+    echo "Usage: $0 [ -h ] ( -n | -l ) -s [ -w ]"
     printf "%-30s  %-40s\n" "  -h | --help" "Show this help message and exit"
     printf "%-30s  %-40s\n" "  -n | --process-name" "The name of the process(es)"
     printf "%-30s  %-40s\n" "  -l | --pid-list" "A list of pids"
     printf "%-30s  %-40s\n" "  -s | --script" "Path to gdb script"
+    printf "%-30s  %-40s\n" "  -w | --wait" "To wait on a process to spawn."
+    printf "%-30s  %-40s\n" "             " "This only works with (-n | --process-name)"
     exit 1
 }
 
@@ -196,6 +199,7 @@ h_option=false
 n_option=false
 l_option=false
 s_option=false
+w_option=false
 GDB_SCRIPT=""
 PID_LIST=()
 # Keep track of our arguments so that we can print it out in -m | --show-sessions
@@ -244,6 +248,11 @@ while [[ $# -gt 0 ]]; do
         GDB_SCRIPT="$2"
         shift 2
         ;;
+      -w|--wait)
+        arguments+="$1 "
+        w_option=true
+        shift
+        ;;
       -h|--help)
         h_option=true
         shift
@@ -279,6 +288,12 @@ if [[ "$s_option" = false ]]; then
     usage
     exit 1
 fi
+# Check if -w is specified, it must be with -n only
+if [[ "$w_option" =  true && "$l_option" = true ]]; then
+  echo -e "$ERROR -w (--wait) cannot be used with -l (--pid-list)"
+  usage
+  exit 1
+fi
 
 # Globals
 GDB_PATH="/usr/bin/gdb"
@@ -291,9 +306,19 @@ gdb_pids=()
 target_process_pids=()
 target_process_names=()
 
-if [[ "$n_option" == true && "$l_option" = false ]]; then
+if [[ "$n_option" = true && "$l_option" = false && "$w_option" = false ]]; then
   target_process_pids=($(pidof $PROCESS_NAME))
-elif [[ "$n_option" == false && "$l_option" = true ]]; then
+elif [[ "$n_option" = true && "$l_option" = false && "$w_option" = true ]]; then
+  echo -e "$INFO Waiting for $PROCESS_NAME to spawn..."
+  while true
+  do
+    target_process_pids=($(pidof $PROCESS_NAME))
+    if [[ -n "$target_process_pids" ]]; then
+      echo -e "$INFO Found $PROCESS_NAME:" "${target_process_pids[@]}"
+      break
+    fi
+  done
+elif [[ "$n_option" = false && "$l_option" = true ]]; then
   target_process_pids=("${PID_LIST[@]}")
 fi
 

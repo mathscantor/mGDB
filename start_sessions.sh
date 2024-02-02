@@ -180,7 +180,7 @@ function is_numeric {
 }
 
 # Function to check if a string is a valid float
-function is_float() {
+function is_float {
   if [[ $1 =~ ^([0-9]+([.][0-9]*)?|[.][0-9]+)$ ]]; then
     return 0 # FLoat
   else

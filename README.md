@@ -28,13 +28,14 @@ To start a session, you can run `start_sessions.sh`
 
 #### 1.1.1 Help (-h | --help)
 <pre>
-Usage: ./start_sessions.sh [ -h ] ( -n | -l ) -s [ -w ]
+Usage: ./start_sessions.sh [ -h ] ( -n | -l ) -s [ -w ] [ -d ]
   -h | --help                   Show this help message and exit         
   -n | --process-name           The name of the process(es)             
   -l | --pid-list               A list of pids                          
   -s | --script                 Path to gdb script                      
   -w | --wait                   To wait on a process to spawn.          
                                 This only works with (-n | --process-name)
+  -d | --delay                  Delays the gdb attcachment in seconds. (integer/float)
 </pre>
 
 #### 1.1.2 Process Name (-n | --process-name)

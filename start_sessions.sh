@@ -33,16 +33,18 @@ function pretty_print_status {
 
 function run_multiple_gdb_scripts {
 
+  echo -e "$INFO GDB batch attach delay: ${DELAY_TIME}s"
+  sleep $DELAY_TIME
 	for pid in "${target_process_pids[@]}"; do
 	  process_name=$(ps -p "$pid" -o comm=)
 	  $GDB_PATH --batch --command=$GDB_SCRIPT -p $pid > $LOGS_DIR/gdb_output/"$pid"_"$process_name".log 2>&1 &
 
-# This command does not highlight the Severity of the message with their respective colours.
-#    $GDB_PATH --batch \
-#    -ex "set logging redirect on" \
-#    -ex "set logging file $LOGS_DIR/gdb_output/$pid.log" \
-#    -ex "set logging enabled on" \
-#    --command=$GDB_SCRIPT -p $pid > /dev/null 2>&1 &
+  # This command does not highlight the Severity of the message with their respective colours.
+  #  $GDB_PATH --batch \
+  #  -ex "set logging redirect on" \
+  #  -ex "set logging file $LOGS_DIR/gdb_output/$pid.log" \
+  #  -ex "set logging enabled on" \
+  #  --command=$GDB_SCRIPT -p $pid > /dev/null 2>&1 &
 
 		gdb_pid=$!
 		if [[ $? -ne 0 ]]; then
@@ -169,22 +171,32 @@ function check_user_args {
 
 # Function to check if a value is numeric
 function is_numeric {
-    local value="$1"
-    if [[ "$value" =~ ^[0-9]+$ ]]; then
-        return 0  # Numeric
-    else
-        return 1  # Not numeric
-    fi
+  local value="$1"
+  if [[ "$value" =~ ^[0-9]+$ ]]; then
+      return 0  # Numeric
+  else
+      return 1  # Not numeric
+  fi
+}
+
+# Function to check if a string is a valid float
+function is_float() {
+  if [[ $1 =~ ^([0-9]+([.][0-9]*)?|[.][0-9]+)$ ]]; then
+    return 0 # FLoat
+  else
+    return 1 # Not Float
+  fi
 }
 
 function usage {
-    echo "Usage: $0 [ -h ] ( -n | -l ) -s [ -w ]"
+    echo "Usage: $0 [ -h ] ( -n | -l ) -s [ -w ] [ -d ]"
     printf "%-30s  %-40s\n" "  -h | --help" "Show this help message and exit"
     printf "%-30s  %-40s\n" "  -n | --process-name" "The name of the process(es)"
     printf "%-30s  %-40s\n" "  -l | --pid-list" "A list of pids"
     printf "%-30s  %-40s\n" "  -s | --script" "Path to gdb script"
     printf "%-30s  %-40s\n" "  -w | --wait" "To wait on a process to spawn."
     printf "%-30s  %-40s\n" "             " "This only works with (-n | --process-name)"
+    printf "%-30s  %-40s\n" "  -d | --delay" "Delays the gdb attcachment in seconds. (integer/float)"
     exit 1
 }
 
@@ -200,7 +212,9 @@ n_option=false
 l_option=false
 s_option=false
 w_option=false
+d_option=false
 GDB_SCRIPT=""
+DELAY_TIME=0
 PID_LIST=()
 # Keep track of our arguments so that we can print it out in -m | --show-sessions
 arguments=""
@@ -253,6 +267,12 @@ while [[ $# -gt 0 ]]; do
         w_option=true
         shift
         ;;
+      -d|--delay)
+        arguments+="$1 $2 "
+        d_option=true
+        DELAY_TIME="$2"
+        shift 2
+        ;;
       -h|--help)
         h_option=true
         shift
@@ -293,6 +313,14 @@ if [[ "$w_option" =  true && "$l_option" = true ]]; then
   echo -e "$ERROR -w (--wait) cannot be used with -l (--pid-list)"
   usage
   exit 1
+fi
+# Check if -d is specified
+if [[ "$d_option" = true ]]; then
+  if ! is_numeric $DELAY_TIME && ! is_float $DELAY_TIME; then
+    echo -e "$ERROR -d (--delay) expected an integer or float but got something else instead!"
+    usage
+    exit 1
+  fi
 fi
 
 # Globals

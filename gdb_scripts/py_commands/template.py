@@ -71,7 +71,7 @@ class Template(gdb.Command):
         else:
             number = int(arg_tokens[0], base=10)
 
-        self.__messenger.print_message("Received Argument value: {}".format(number))
+        self.__messenger.print_message(Severity.INFO, "Received Argument value: {}".format(number))
         gdb.execute("set {} = 0".format(self.__ret_variable_gdb))
         return
 

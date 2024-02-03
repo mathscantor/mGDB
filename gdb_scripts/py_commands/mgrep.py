@@ -36,6 +36,7 @@ class Mgrep(gdb.Command):
         print("    - number of arguments: {}".format(self.__num_args))
         print("    - ret variable in gdb: {}".format(self.__ret_variable_gdb))
         print(r"      -> returns an array of addresses on success and {0x0} on failure.")
+        print("    - Getting size of array returned: sizeof($mgrep_ret)/sizeof(*$mgrep_ret)")
         return
 
     def __check_arguments(self,
@@ -109,10 +110,10 @@ class Mgrep(gdb.Command):
         match_list = list()
         bytes_expr = ', '.join([f"0x{ord(char):02x}" for char in expr])
         for section_name in memory_sections:
-            results = gdb.execute("find /b1 {}, {}, {}".format(memory_sections[section_name]["start_addr"],
-                                                               memory_sections[section_name]["end_addr"],
-                                                               bytes_expr), 
-                                                               to_string=True)
+            results = gdb.execute("find /b {}, {}, {}".format(memory_sections[section_name]["start_addr"],
+                                                              memory_sections[section_name]["end_addr"],
+                                                              bytes_expr), 
+                                                              to_string=True)
             results_tokens = results.split("\n")
             if results_tokens[-2] == "Pattern not found.":
                 continue
@@ -143,13 +144,15 @@ class Mgrep(gdb.Command):
         if len(match_list) == 0:
             self.__messenger.print_message(Severity.INFO, "Found 0 matches!")
             return
-        print("@@@",match_list)
+
         self.__messenger.print_message(Severity.INFO, "Found {} matches at:".format(len(match_list)))
         for addr in match_list:
-            full_string = gdb.execute("printf \"%s\", {}".format(addr), to_string=True)
-            print("{} ({}) -> \"{}\"".format(addr, 
-                                             self.__get_binary_path_from_addr(addr, memory_sections),
-                                             full_string))
+            addr_and_string = ' '.join(gdb.execute("x/s {}".format(addr), to_string=True).strip("\n").split())
+            binary_path = self.__get_binary_path_from_addr(addr, memory_sections)
+            offset_from_base = hex(int(addr, 16) - int(memory_sections[binary_path]["start_addr"], 16))
+            print("\t[+] {} + {} -> {}".format(binary_path, 
+                                               offset_from_base,
+                                               addr_and_string))
 
         return
 

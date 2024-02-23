@@ -35,7 +35,7 @@ class JsonGetValueFromKey(gdb.Command):
         print("    - command name: {}".format(self.__command_name))
         print("    - number of arguments: {}".format(self.__num_args))
         print("    - ret variable in gdb: {}".format(self.__ret_variable_gdb))
-        print("      -> returns an 1 on failure, otherwise 0 on success")
+        print("      -> returns on 1 on failure, otherwise 0 on success")
         return
 
     def __check_arguments(self,
@@ -109,106 +109,21 @@ class JsonGetValueFromKey(gdb.Command):
                     gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
                     return
 
-            if len(keys) > 5:
-                self.__messenger.print_message(Severity.ERROR, "Too many parent-child keys! (Currently supports <= 5)")
-                gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                return
+            concat_keys = ""
+            value = json_object
+            for key in keys:
+                if concat_keys == "":
+                    concat_keys += key
+                else:
+                    concat_keys += ".{}".format(key)
+                if key not in value:
+                    self.__messenger.print_message(Severity.ERROR,
+                                                   "Key: {} does not exist!".format(concat_keys))
+                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
+                    return
+                value = value[key]
 
-            # Get the value from the key
-            if len(keys) == 1:
-                if keys[0] not in json_object:
-                    self.__messenger.print_message(Severity.ERROR,
-                                                   "Key: {} does not exist!".format(keys[0]))
-                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                    return
-                self.__messenger.print_message(Severity.INFO, "{}: {}".format(arg_tokens[1],
-                                                                              json_object[keys[0]]))
-
-            elif len(keys) == 2:
-                if keys[0] not in json_object:
-                    self.__messenger.print_message(Severity.ERROR,
-                                                   "Key: {} does not exist!".format(keys[0]))
-                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                    return
-                if keys[1] not in json_object[keys[0]]:
-                    self.__messenger.print_message(Severity.ERROR,
-                                                   "Key: {} does not exist!".format(keys[0]))
-                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                    return
-                self.__messenger.print_message(Severity.INFO, "{}: {}".format(arg_tokens[1],
-                                                                              json_object[keys[0]][keys[1]]))
-
-            elif len(keys) == 3:
-                if keys[0] not in json_object:
-                    self.__messenger.print_message(Severity.ERROR,
-                                                   "Key: {} does not exist!".format(keys[0]))
-                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                    return
-                if keys[1] not in json_object[keys[0]]:
-                    self.__messenger.print_message(Severity.ERROR,
-                                                   "Key: {} does not exist!".format(keys[0]))
-                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                    return
-                if keys[2] not in json_object[keys[0]][keys[1]]:
-                    self.__messenger.print_message(Severity.ERROR,
-                                                   "Key: {} does not exist!".format(keys[0]))
-                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                    return
-                self.__messenger.print_message(Severity.INFO, "{}: {}".format(arg_tokens[1],
-                                                                              json_object[keys[0]][keys[1]][keys[2]]))
-
-            elif len(keys) == 4:
-                if keys[0] not in json_object:
-                    self.__messenger.print_message(Severity.ERROR,
-                                                   "Key: {} does not exist!".format(keys[0]))
-                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                    return
-                if keys[1] not in json_object[keys[0]]:
-                    self.__messenger.print_message(Severity.ERROR,
-                                                   "Key: {} does not exist!".format(keys[0]))
-                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                    return
-                if keys[2] not in json_object[keys[0]][keys[1]]:
-                    self.__messenger.print_message(Severity.ERROR,
-                                                   "Key: {} does not exist!".format(keys[0]))
-                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                    return
-                if keys[3] not in json_object[keys[0]][keys[1]][keys[2]]:
-                    self.__messenger.print_message(Severity.ERROR,
-                                                   "Key: {} does not exist!".format(keys[0]))
-                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                    return
-                self.__messenger.print_message(Severity.INFO, "{}: {}".format(arg_tokens[1],
-                                                                              json_object[keys[0]][keys[1]][keys[2]][keys[3]]))
-
-            elif len(keys) == 5:
-                if keys[0] not in json_object:
-                    self.__messenger.print_message(Severity.ERROR,
-                                                   "Key: {} does not exist!".format(keys[0]))
-                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                    return
-                if keys[1] not in json_object[keys[0]]:
-                    self.__messenger.print_message(Severity.ERROR,
-                                                   "Key: {} does not exist!".format(keys[0]))
-                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                    return
-                if keys[2] not in json_object[keys[0]][keys[1]]:
-                    self.__messenger.print_message(Severity.ERROR,
-                                                   "Key: {} does not exist!".format(keys[0]))
-                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                    return
-                if keys[3] not in json_object[keys[0]][keys[1]][keys[2]]:
-                    self.__messenger.print_message(Severity.ERROR,
-                                                   "Key: {} does not exist!".format(keys[0]))
-                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                    return
-                if keys[4] not in json_object[keys[0]][keys[1]][keys[2]][keys[3]]:
-                    self.__messenger.print_message(Severity.ERROR,
-                                                   "Key: {} does not exist!".format(keys[0]))
-                    gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
-                    return
-                self.__messenger.print_message(Severity.INFO, "{}: {}".format(arg_tokens[1],
-                                                                              json_object[keys[0]][keys[1]][keys[2]][keys[3]][keys[4]]))
+            self.__messenger.print_message(Severity.INFO, "{}: {}".format(concat_keys, value))
 
         except json.JSONDecodeError:
             self.__messenger.print_message(Severity.ERROR, "The string @ {} is not a valid json object!".format(json_str_addr))

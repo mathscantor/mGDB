@@ -184,4 +184,6 @@ I am currently accepting pull requests for `gdb_scripts/py_commands` if you wish
 an extension that is useful for the community. Please follow the `gdb_scripts/py_commands/template.py`
 as a guideline on writing extensions.
 
+See the <a href="https://github.com/mathscantor/mGDB/wiki/Contributing">wiki</a> to find our how exactly
+you can write your own extensions.
 

@@ -164,59 +164,20 @@ root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./kill_sessions.sh -g
 As GDB's default commands are not the nicest and easiest to look at, there is a need
 to extend its capabilities with the help of python scripting.
 
-An example would be `info proc mappings` which shows you the different start addresses
-and end addresses of a particular binary.
-
-<pre>
-(gdb) info proc mappings
-process 9473
-Mapped address spaces:
-
-          Start Addr           End Addr       Size     Offset  Perms  objfile
-      0x5589a58d7000     0x5589a58d8000     0x1000        0x0  r--p   /home/gerald/repositories/mGDB/test_binaries/test
-      0x5589a58d8000     0x5589a58d9000     0x1000     0x1000  r-xp   /home/gerald/repositories/mGDB/test_binaries/test
-      0x5589a58d9000     0x5589a58da000     0x1000     0x2000  r--p   /home/gerald/repositories/mGDB/test_binaries/test
-      0x5589a58da000     0x5589a58db000     0x1000     0x2000  r--p   /home/gerald/repositories/mGDB/test_binaries/test
-      0x5589a58db000     0x5589a58dc000     0x1000     0x3000  rw-p   /home/gerald/repositories/mGDB/test_binaries/test
-      0x5589a5aa9000     0x5589a5aca000    0x21000        0x0  rw-p   [heap]
-      <span style="color:#7FFF00">0x7f6a81c00000</span>     0x7f6a81c28000    0x28000        0x0  r--p   <span style="color:#7FFF00">/usr/lib/x86_64-linux-gnu/libc.so.6</span>
-      0x7f6a81c28000     0x7f6a81dbd000   0x195000    0x28000  r-xp   /usr/lib/x86_64-linux-gnu/libc.so.6
-      0x7f6a81dbd000     0x7f6a81e15000    0x58000   0x1bd000  r--p   /usr/lib/x86_64-linux-gnu/libc.so.6
-      0x7f6a81e15000     0x7f6a81e19000     0x4000   0x214000  r--p   /usr/lib/x86_64-linux-gnu/libc.so.6
-      0x7f6a81e19000     0x7f6a81e1b000     0x2000   0x218000  rw-p   /usr/lib/x86_64-linux-gnu/libc.so.6
-</pre>
-
-If I wanted the start address of `/usr/lib/x86_64-linux-gnu/libc.so.6`, I would have to manually look through the output
-and probably assign `0x7f6a81c00000` to a variable. However, we want to be
-able to do this programmatically.
-
 Under `gdb_scripts/py_commands`, there are several useful commands such as:
 - get_base_addr
 - load_library_symbol
 - strlen
+- mgrep
+- fd_info
+- json_get_value_from_key
 
 To import in these commands, you can put the following line in your gdb script:
 ```commandline
 source gdb_scripts/py_commands/<command_name>.py
 ```
-
-Example of getting base address of a binary and printing its address using the return variable:
-<pre>
-(gdb) source gdb_scripts/py_commands/get_base_addr.py 
-<span style="color:#7FFF00">[INFO]</span> Example usage of get_base_addr:
-Template: get_base_addr <binary_path>
-Eg. get_base_addr /usr/lib/example_lib.so
-    - command name: get_base_addr
-    - number of arguments: 1
-    - ret variable in gdb: $get_base_addr_ret
-      -> returns 0x0 on failure, otherwise a valid address
-
-(gdb) get_base_addr /home/gerald/repositories/mGDB/test_binaries/test
-<span style="color:#7FFF00">[INFO]</span> Found base address of /home/gerald/repositories/mGDB/test_binaries/test: 0x5589a58d7000
-
-(gdb) printf "%p\n", $get_base_addr_ret
-0x5589a58d7000
-</pre>
+See <a href="https://github.com/mathscantor/mGDB/wiki/Extensions">here</a> for more information 
+on the usage of these extensions
 
 ## 3. Contributing
 I am currently accepting pull requests for `gdb_scripts/py_commands` if you wish to implement

@@ -41,7 +41,7 @@ class Mgrep(gdb.Command):
 
     def __check_arguments(self,
                           args: str) -> bool:
-        pattern = r'^[\'"](.+)[\'"]$'
+        pattern = r'^"(.+)"$'
         match = re.match(pattern, args)
         if not match:
             self.__messenger.print_message(Severity.ERROR, 

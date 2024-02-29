@@ -2,6 +2,7 @@ import gdb
 import os
 import sys
 import json
+import re
 from typing import *
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils.messenger import Severity, Messenger
@@ -46,12 +47,20 @@ class JsonGetValueFromKey(gdb.Command):
                                                                                               self.__num_args,
                                                                                               len(arg_tokens)))
             return False
+
+        pattern = r'^"(.+)"$'
+        match = re.match(pattern, arg_tokens[1])
+        if not match:
+            self.__messenger.print_message(Severity.ERROR,
+                                           "Please encapsulate your string with double quotes (\"\")\n" 
+                                           "If you want to find patterns with \", remember to escape with \\")
+            return False
         return True
 
     def invoke(self,
                args: str,
                from_tty: bool = False) -> None:
-        arg_tokens = [arg.strip() for arg in args.split()]
+        arg_tokens = [arg.strip() for arg in args.split(maxsplit=1)]
         if not self.__check_arguments(arg_tokens):
             self.__usage()
             return
@@ -92,15 +101,14 @@ class JsonGetValueFromKey(gdb.Command):
                     pass
                 length += 1
         except gdb.MemoryError:
+            self.__messenger.print_message(Severity.ERROR, "Cannot access memory at {}!".format(hex(json_str_addr)))
             gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
             return
 
         # After assembling the json string, verify that the json string is valid
         try:
             json_object = json.loads(json_str)
-
-            keys = [key.strip() for key in arg_tokens[1].split(".")]
-
+            keys = [key.strip() for key in arg_tokens[1].split('"')[1].split(".")]
             # Check for empty key
             for key in keys:
                 if key == "":
@@ -126,7 +134,7 @@ class JsonGetValueFromKey(gdb.Command):
             self.__messenger.print_message(Severity.INFO, "{}: {}".format(concat_keys, value))
 
         except json.JSONDecodeError:
-            self.__messenger.print_message(Severity.ERROR, "The string @ {} is not a valid json object!".format(json_str_addr))
+            self.__messenger.print_message(Severity.ERROR, "The string @ {} is not a valid json object!".format(hex(json_str_addr)))
             gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
             return
 

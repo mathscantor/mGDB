@@ -36,7 +36,8 @@ b func_3
 commands
   info registers rdi
   x/16bx $rdi
-  json_get_value_from_key $rdi user2.asd
+  json_get_value_from_key $rdi "user1.name"
+  json_get_value_from_key $rdi "user2"
   continue
 end
 

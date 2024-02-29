@@ -33,12 +33,12 @@ class Mgrep(gdb.Command):
 
     def __usage(self) -> None:
         self.__messenger.print_message(Severity.INFO, "Example usage of {}:".format(self.__command_name))
-        print("Template: {} {}".format(self.__command_name, "<expression>"))
-        print("Eg. {} {}".format(self.__command_name, "string_to_find"))
+        print("Template: {} {}".format(self.__command_name, "\"<expression>\""))
+        print("Eg. {} {}".format(self.__command_name, "\"string_to_find\""))
         print("    - command name: {}".format(self.__command_name))
         print("    - number of arguments: {}".format(self.__num_args))
         print("    - ret variable in gdb: {}".format(self.__ret_variable_gdb))
-        print(r"      -> returns 0 on success and 1 on failure.")
+        print(r"      -> returns the number of matches on success(>= 0) and -1 on failure.")
         return
 
     def __check_arguments(self,
@@ -112,19 +112,16 @@ class Mgrep(gdb.Command):
                args: str,
                from_tty: bool = False) -> None:
 
-        gdb.execute("set {} = 1".format(self.__ret_variable_gdb))
+        gdb.execute("set {} = -1".format(self.__ret_variable_gdb))
         if not self.__check_arguments(args):
             self.__usage()
             return
 
-        # self.__messenger.print_message(Severity.INFO, "Received Argument value: {}".format(args))
         memory_sections = self.__mm_handler.get_memory_sections()
         expr = args.split('"')[1]
         match_list = self.__find_pattern(memory_sections, expr)
         self.__pretty_print_pattern_match(memory_sections, match_list)
-        if len(match_list) == 0:
-            return
-        gdb.execute("set {} = 0".format(self.__ret_variable_gdb))
+        gdb.execute("set {} = {}".format(self.__ret_variable_gdb, len(match_list)))
         return
 
 

@@ -29,10 +29,10 @@ class JsonGetValueFromKey(gdb.Command):
 
     def __usage(self) -> None:
         self.__messenger.print_message(Severity.INFO, "Example usage of {}:".format(self.__command_name))
-        print("Template: {} {} {}".format(self.__command_name, "<json string address>", "<key>"))
-        print("Eg. {} {} {}".format(self.__command_name, "$json_string_addr", "data.data.ppid"))
-        print("Eg. {} {} {}".format(self.__command_name, "0x55fba5e821ab", "type"))
-        print("Eg. {} {} {}".format(self.__command_name, "93907404636198", "id"))
+        print("Template: {} {} {}".format(self.__command_name, "<json string address>", "\"<key>\""))
+        print("Eg. {} {} {}".format(self.__command_name, "$json_string_addr", "\"data.data.ppid\""))
+        print("Eg. {} {} {}".format(self.__command_name, "0x55fba5e821ab", "\"type\""))
+        print("Eg. {} {} {}".format(self.__command_name, "93907404636198", "\"id\""))
         print("    - command name: {}".format(self.__command_name))
         print("    - number of arguments: {}".format(self.__num_args))
         print("    - ret variable in gdb: {}".format(self.__ret_variable_gdb))

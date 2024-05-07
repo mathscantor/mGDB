@@ -68,9 +68,12 @@ class FDInfo(gdb.Command):
     def __get_fd_type(self,
                       pid: int,
                       fd: int) -> FDType:
-
+        
+        fd_path = "/proc/{}/fd/{}".format(pid, fd)
         try:
-            fd_info = os.stat("/proc/{}/fd/{}".format(pid, fd))
+            file_name = os.readlink(fd_path)
+            self.__messenger.print_message(Severity.INFO, "FD Readlink: {}".format(file_name))
+            fd_info = os.stat(fd_path)
             if stat.S_ISSOCK(fd_info.st_mode):
                 return FDType.UNIX_SOCKET
             elif stat.S_ISREG(fd_info.st_mode):

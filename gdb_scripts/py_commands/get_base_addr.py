@@ -37,24 +37,25 @@ class GetBaseAddr(gdb.Command):
         return
 
     def __check_arguments(self,
-                          arg_tokens: List[str]) -> bool:
-        if len(arg_tokens) != self.__num_args:
-            self.__messenger.print_message(Severity.ERROR, "{}: Expected {} arguments but "
-                                                           "got {} arguments instead!".format(self.__command_name,
-                                                                                              self.__num_args,
-                                                                                              len(arg_tokens)))
+                          args: str) -> bool:
+        pattern = r'^"(.+)"$'
+        match = re.match(pattern, args)
+        if not match:
+            self.__messenger.print_message(Severity.ERROR, 
+                                           "Please encapsulate your string with double quotes (\"\")\n" 
+                                           "If you want to find patterns with \", remember to escape with \\")
             return False
+
         return True
 
     def invoke(self,
                args: str,
                from_tty: bool = False) -> None:
-        arg_tokens = [arg.strip() for arg in args.split()]
-        if not self.__check_arguments(arg_tokens):
+        if not self.__check_arguments(args):
             self.__usage()
             return
-
-        binary_path = arg_tokens[0]
+        
+        binary_path = args.split('"')[1]
         mappings = gdb.execute("info proc mappings", to_string=True).split("\n")[4:]
         for mapping in mappings:
             if os.path.abspath(binary_path) in mapping:

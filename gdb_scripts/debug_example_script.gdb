@@ -14,7 +14,7 @@ source gdb_scripts/py_commands/peek_n_step_into.py
 
 load_library_symbol /usr/lib/x86_64-linux-gnu libc.so.6
 
-get_base_addr ./test_binaries/test
+get_base_addr "./test_binaries/test"
 printf "base addr of test: %p\n", $get_base_addr_ret
 
 b func_1

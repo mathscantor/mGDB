@@ -1,3 +1,5 @@
+# After running this gdb script, run py_postprocessing/gdb_step_indent.py on gdb.txt to get a nice call graph.
+
 set confirm off
 set pag off
 set print pretty on

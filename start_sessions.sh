@@ -387,7 +387,7 @@ if [[ "$n_option" = true && "$pp_option" = true ]]; then
 fi
 
 # Check that either -l or -pp is specified, but not both
-if [[ "$n_option" = true && "$pp_option" = true ]]; then
+if [[ "$l_option" = true && "$pp_option" = true ]]; then
     echo -e "$ERROR -l (--pid-list) and -pp (--parent-pid) are mutually exclusive options."
     usage
     exit 1

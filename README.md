@@ -24,18 +24,19 @@ mGDB manages your gdb processes within a particular session. When you spawn
 multiple gdb processes to hook onto your target processes, it will be managed
 under a sessions categorized by the date and time that you run it.
 
-To start a session, you can run `start_sessions.sh`
+To start a session, you can run `mGDB-client start`
 
 #### 1.1.1 Help (-h | --help)
 <pre>
-Usage: ./start_sessions.sh [ -h ] ( -n | -l ) -s [ -w ] [ -d ]
-  -h | --help                   Show this help message and exit         
-  -n | --process-name           The name of the process(es)             
-  -l | --pid-list               A list of pids                          
-  -s | --script                 Path to gdb script                      
-  -w | --wait                   To wait on a process to spawn.          
-                                This only works with (-n | --process-name)
-  -d | --delay                  Delays the gdb attcachment in seconds. (integer/float)
+Usage: mGDB-client start [ -h ] ( -n | -l ) -s [ -w ] [ -d ]
+  -h  | --help                  Show this help message and exit         
+  -n  | --process-name          The name of the process(es)             
+  -l  | --pid-list              A list of pids                          
+  -pp | --parent-pid            The parent PID (used in conjunction with -t | --tid-list)
+  -t  | --tid-list              A list of tids (used in conjunction with -pp | --parent-pid)
+  -s  | --script                Path to gdb script                      
+  -w  | --wait                  To wait on a process to spawn. (Only used with -n)
+  -d  | --delay                 Delays the gdb attcachment in seconds. (integer/float)
 </pre>
 
 #### 1.1.2 Process Name (-n | --process-name)
@@ -43,7 +44,7 @@ In this example, I pre-ran 3 binaries called `test` and the
 gdb script I am using is `gdb_scripts/debug_example_script.gdb`
 
 <pre>
-root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./start_sessions.sh -n test -s gdb_scripts/debug_example_script.gdb 
+root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./mGDB-client start -n test -s gdb_scripts/debug_example_script.gdb 
 
 <span style="color:#7FFF00">[INFO]</span> Debugging Session Mappings (16-10-2023T12-47-21)
 -------------------- | -------------------- | --------------------
@@ -67,7 +68,7 @@ All gdb output is redirected to:
 Reusing the example in [1.1.2](#112-process-name---n----process-name-), instead of stating a process name, you can 
 specify a list of PIDs to hook on. 
 <pre>
-root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./start_sessions.sh -l 9473 9105 9443 -s gdb_scripts/debug_example_script.gdb 
+root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./mGDB-client start -l 9473 9105 9443 -s gdb_scripts/debug_example_script.gdb 
 
 <span style="color:#7FFF00">[INFO]</span> Debugging Session Mappings (16-10-2023T13-07-32)
 -------------------- | -------------------- | --------------------
@@ -89,9 +90,9 @@ All gdb output is redirected to:
 </pre>
 
 ### 1.2 Showing Sessions
-Running `show_sessions.sh` will show all current sessions managed by **mGDB** currently.
+Running `mGDB-client show` will show all current sessions managed by **mGDB** currently.
 <pre>
-root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./show_sessions.sh 
+root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./mGDB-client show 
 
 <span style="color:#7FFF00">[INFO]</span> Current Sessions:
 Session              | Arguments                                         
@@ -100,34 +101,33 @@ Session              | Arguments
 16-10-2023T13-17-27  | -l 9105 -s gdb_scripts/debug_example_script.gdb
 </pre>
 
-### 1.3 Killing Sessions
-Run `kill_sessions.sh` to end sessions managed by **mGDB** currently.
+### 1.3 Stopping Sessions
+Run `mGDB-client stop` to end sessions managed by **mGDB** currently.
 
 #### 1.3.1 Help (-h | --help)
 <pre>
-root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./kill_sessions.sh -h
-Usage: ./kill_sessions.sh [ -h ] ( -t | -a | -g )
+root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./mGDB-client stop -h
+Usage: mGDB-client stop [ -h ] ( -t | -a | -g )
   -h | --help                   Show this help message and exit         
   -t | --session-datetime       The gdb session identified by datetime  
   -a | --all                    Detaches all gdb processes from all sessions.
   -g | --global                 Detaches all gdb processes, including the ones not known in database.
 </pre>
 
-#### 1.3.2 Killing a Particular Session (-t | --session-datetime)
-You can refer to the outputs of `./show_sessions.sh` to kill off a particular session.
+#### 1.3.2 Stopping a Particular Session (-t | --session-datetime)
+You can refer to the outputs of `mGDB-client show` to stop a particular session.
 <pre>
-root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./kill_sessions.sh -t 16-10-2023T13-13-57
+root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./mGDB-client stop -t 16-10-2023T13-13-57
 <span style="color:#7FFF00">[INFO]</span> Detached gdb (10445) from test (9473)
 <span style="color:#7FFF00">[INFO]</span> Detached gdb (10447) from test (9443)
 <span style="color:#7FFF00">[INFO]</span> Removed session 16-10-2023T13-13-57 in database.
 </pre>
 
 
-#### 1.3.3 Killing all sessions managed by mGDB (-a | --all)
-This feature just provides an easy way for lazy people like myself to kill off
-all gdb processes in all sessions.
+#### 1.3.3 Stopping all sessions managed by mGDB (-a | --all)
+This feature just provides an easy way for lazy people like myself to stop all gdb processes in every session.
 <pre>
-root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./kill_sessions.sh -a
+root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./mGDB-client stop -a
 <span style="color:#7FFF00">[INFO]</span> Detaching all gdb processes in session 16-10-2023T13-17-27...
 <span style="color:#7FFF00">[INFO]</span> Detached gdb (10579) from test (9105)
 <span style="color:#7FFF00">[INFO]</span> Removed session 16-10-2023T13-17-27 in database.
@@ -139,15 +139,14 @@ root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./kill_sessions.sh -a
 --------------------------------------------------------------
 </pre>
 
-#### 1.3.4 Killing All GDB Processes (-g | --global)
+#### 1.3.4 Stopping All GDB Processes (-g | --global)
 **WARNING**: Please use this command only when you are very sure that you are the only one
-doing the debugging on the system **or** if there are unwanted GDB processes hooking onto
-your target processes.
+doing the debugging on the system **or** if there are unwanted GDB processes hooking onto your target processes.
 
 The `-g | --global` option just provides an easy way to hard reset the enviroment such that there
 won't be any gdb processes running anymore.
 <pre>
-root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./kill_sessions.sh -g
+root@gerald-ubuntu:/home/gerald/repositories/mGDB# ./mGDB-client stop -g
 <span style="color:#7FFF00">[INFO]</span> Detaching all gdb processes in session 16-10-2023T13-34-34...
 <span style="color:#7FFF00">[INFO]</span> Detached gdb (10980) from test (9473)
 <span style="color:#7FFF00">[INFO]</span> Detached gdb (10982) from test (9443)

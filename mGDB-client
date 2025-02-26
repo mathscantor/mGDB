@@ -1,0 +1,800 @@
+#!/bin/bash
+
+#-------Severity-------#
+DEBUG="\033[0;94m[DEBUG]\033[0m"
+INFO="\033[0;92m[INFO]\033[0m"
+WARNING="\033[0;93m[WARNING]\033[0m"
+ERROR="\033[0;91m[ERROR]\033[0m"
+#----------------------#
+
+# Start Action Functions
+function pretty_print_start_status {
+	echo -e "$INFO Debugging Session Mappings ($CURR_DATETIME)"
+    if [[ "$start_n_option" = true || "$start_l_option" = true ]]; then
+        printf "%-20s | %-20s | %-20s\n" "--------------------" "--------------------" "--------------------"
+        printf "%-20s | %-20s | %-20s\n" "GDB PID" "PROCESS PID" "PROCESS NAME"
+        printf "%-20s | %-20s | %-20s\n" "--------------------" "--------------------" "--------------------"
+
+        len="${#TARGET_PID_LIST[@]}"
+        for (( i=0; i<$len; i++ )); do
+            printf "%-20s | %-20s | %-20s\n" "${GDB_PID_LIST[$i]}" "${TARGET_PID_LIST[$i]}" "${TARGET_PROCESS_NAME_LIST[$i]}"
+        done
+        echo ""
+        echo "All gdb output is redirected to:"
+        for (( i=0; i<$len; i++ )); do
+            printf " - $LOGS_DIR/gdb_output/${TARGET_PID_LIST[$i]}_${TARGET_PROCESS_NAME_LIST[$i]}.log\n"
+        done
+        echo ""
+
+    elif [[ "$start_pp_option" = true && "$start_t_option" = true ]]; then
+        printf "%-20s | %-20s | %-20s\n" "--------------------" "--------------------" "--------------------"
+        printf "%-20s | %-20s | %-20s\n" "GDB PID" "THREAD TID" "PROCESS NAME"
+        printf "%-20s | %-20s | %-20s\n" "--------------------" "--------------------" "--------------------"
+        len="${#TARGET_TID_LIST[@]}"
+        for (( i=0; i<$len; i++ )); do
+            printf "%-20s | %-20s | %-20s\n" "${GDB_PID_LIST[$i]}" "${TARGET_TID_LIST[$i]}" "${TARGET_PROCESS_NAME_LIST[$i]}"
+        done
+        echo ""
+        echo "All gdb output is redirected to:"
+        for (( i=0; i<$len; i++ )); do
+            printf " - $LOGS_DIR/gdb_output/thread_${TARGET_TID_LIST[$i]}_${TARGET_PROCESS_NAME_LIST[$i]}.log\n"
+        done
+        echo ""
+    fi
+}
+
+function start_session {
+
+    if [[ ${DELAY_TIME} -gt 0 ]]; then
+        echo -e "$INFO GDB batch attach delay: ${DELAY_TIME}s"
+        sleep $DELAY_TIME
+    fi
+
+    # For targeting multiple processes / process via name or list
+    if [[ "$start_n_option" = true || "$start_l_option" = true ]]; then
+        for pid in "${TARGET_PID_LIST[@]}"; do
+            PROCESS_NAME=$(ps -p "$pid" -o comm=)
+            $GDB_PATH --batch --command=$GDB_SCRIPT -p $pid > $LOGS_DIR/gdb_output/"$pid"_"$PROCESS_NAME".log 2>&1 &
+
+            gdb_pid=$!
+            if [[ $? -ne 0 ]]; then
+                echo -e "$ERROR Error in attaching gdb to $PROCESS_NAME($pid)"
+            else
+                GDB_PID_LIST+=("${gdb_pid}")
+                TARGET_PROCESS_NAME_LIST+=("${PROCESS_NAME}")
+            fi
+        done
+        for i in "${!GDB_PID_LIST[@]}"; do
+            echo "${GDB_PID_LIST[$i]},${TARGET_PID_LIST[$i]},${TARGET_PROCESS_NAME_LIST[$i]}" >> $LATEST_SESSION_FILE
+        done
+        echo -e "$INFO Added database: $LATEST_SESSION_FILE"
+
+    # For target speicfic threads in a specific process
+    elif [[ "$start_pp_option" = true && "$start_t_option" = true ]]; then
+        PROCESS_NAME=$(ps -p "${TARGET_PARENT_PID}" -o comm=)
+        for tid in "${TARGET_TID_LIST[@]}"; do
+        $GDB_PATH --batch --command=$GDB_SCRIPT -p $tid > $LOGS_DIR/gdb_output/thread_"$tid"_"$PROCESS_NAME".log 2>&1 &
+        gdb_pid=$!
+        if [[ $? -ne 0 ]]; then
+            echo -e "$ERROR Error in attaching gdb to thread $tid of $PROCESS_NAME($TARGET_PARENT_PID)"
+        else
+            GDB_PID_LIST+=("${gdb_pid}")
+            TARGET_PROCESS_NAME_LIST+=("${PROCESS_NAME}")
+        fi
+        done
+        for i in "${!GDB_PID_LIST[@]}"; do
+            echo "${GDB_PID_LIST[$i]},${TARGET_TID_LIST[$i]},$PROCESS_NAME" >> $LATEST_SESSION_FILE
+        done
+        echo -e "$INFO Added database: $LATEST_SESSION_FILE"
+    fi
+
+    # Add the full arguments used into a file for printing later
+    echo "$arguments" > "$DATABASE_DIR/$CURR_DATETIME/arguments.txt"
+
+    pretty_print_start_status
+    pretty_print_start_status > $LOGS_DIR/mappings.txt
+    echo -e "$INFO Added mappings: $LOGS_DIR/mappings.txt"
+
+    gdb_script_filename=$(basename "$GDB_SCRIPT")
+    cp $GDB_SCRIPT $LOGS_DIR/$gdb_script_filename
+    echo -e "$INFO Added gdb script contents for reference: $LOGS_DIR/$gdb_script_filename"	
+    echo -e "$INFO Type the following command to follow all logs: tail -f $LOGS_DIR/gdb_output/*"
+    echo ""
+    exit 0
+}
+
+function has_duplicate_pid {
+    local process_pids_1=("${!1}")  # Array 1
+    local process_pids_2=("${!2}")  # Array 2
+    local gdb_pids_2=("${!3}") # gdb pids related to array 2
+    local process_names_2=("${!4}") # process names related to array 2
+    local duplicate_pids=()
+
+    # Loop through elements in Array 1
+    for i in "${!process_pids_1[@]}"; do
+        # Loop through elements in Array 2
+        for j in "${!process_pids_2[@]}"; do
+            # Compare elements for equality
+            if [ "${process_pids_1[$i]}" == "${process_pids_2[$j]}" ]; then
+                echo -e "$ERROR GDB (${gdb_pids_2[$j]}) is already debugging ${process_names_2[$i]} (${process_pids_1[$i]})!"
+                duplicate_pids+=("${process_pids_1[$i]}")
+            fi
+        done
+    done
+
+    # if there are duplicate pids, return code 0
+    if [[ ${#duplicate_pids[@]} -ne 0 ]]; then
+        return 0
+    fi
+    #else return code 1
+    return 1
+}
+
+function check_start_options {
+
+  # if gdb script does not exist, exit 1
+    if [[ ! -f $GDB_SCRIPT ]]; then
+        echo -e "$ERROR gdb script does not exist: $GDB_SCRIPT"
+		exit 1
+	fi
+
+    if [[ "$start_pp_option" = true && "$start_t_option" = true ]]; then
+        non_existent_tids=()
+        for tid in ${TARGET_TID_LIST[@]}; do
+            if [ ! -d /proc/$TARGET_PARENT_PID/task/$tid ]; then
+                non_existent_tids+=("${tid}")
+            fi
+        done
+        if [[ "${#non_existent_tids[@]}" -ne 0 ]]; then
+            echo -e "$ERROR The following thread TIDs of the parent process ($TARGET_PARENT_PID) does not exist:" "${non_existent_tids[@]}"
+            echo -e "$INFO Available Thread TIDs: "$(ls /proc/$TARGET_PARENT_PID/task -1 | tail -n +2 | paste -sd " ")
+            exit 1
+        fi
+
+    else
+        # if there are 0 targeted pids, exit 1
+        if [[ ${#TARGET_PID_LIST[@]} -eq 0 ]]; then
+            if [[ "$start_n_option" = true && "$start_l_option" = false ]]; then
+                echo -e "$ERROR There are currently no running $PROCESS_NAME processes!"
+                exit 1
+            elif [[ "$start_n_option" = false && "$start_l_option" = true ]]; then
+                echo -e "$ERROR No running processes were given!"
+                exit 1
+            fi
+        fi
+
+        # check if any of the targeted pids actually do not exist. If so, exit early and throw error
+        non_existent_pids=()
+        for i in "${!TARGET_PID_LIST[@]}"; do
+            ps "${TARGET_PID_LIST[$i]}" > /dev/null 2>&1
+            if [[ $? -ne 0 ]]; then
+                non_existent_pids+=("${TARGET_PID_LIST[$i]}")
+            fi
+        done
+        if [[ "${#non_existent_pids[@]}" -ne 0 ]]; then
+            echo -e "$ERROR The following PIDs does not exist:" "${non_existent_pids[@]}"
+            exit 1
+        fi
+    fi
+
+    # No need to check if there isn't a database directory
+    if [[ ! -d $DATABASE_DIR ]]; then
+        return 0
+    fi
+
+    # Crawl thorugh each session_datetime directory and check if there are any current gdb process
+    # that are already attached to the targeted processes
+    for session_datetime_dir in "$DATABASE_DIR"/*; do
+        if [[ ! -d "$session_datetime_dir" ]]; then
+            continue
+        fi
+        if [[ ! -f "$session_datetime_dir/sessions.txt" ]]; then
+            continue
+        fi
+        session_datetime=$(basename "$session_datetime_dir")
+
+        actual_running_gdb_pids=()
+        actual_debugged_process_pids=()
+        actual_debugged_process_names=()
+        while IFS=',' read -r gdb_pid process_pid process_name; do
+            actual_running_gdb_pids+=("$gdb_pid")
+            actual_debugged_process_pids+=("$process_pid")
+            actual_debugged_process_names+=("$process_name")
+        done < "$session_datetime_dir/sessions.txt"
+
+        if [[ ${#actual_running_gdb_pids[@]} -ne 0 ]]; then
+            # if the requested target pid/tid is already being debugged by a gdb process, return error later
+            if [[ ${#TARGET_PID_LIST[@]} -ne 0 ]]; then
+                if has_duplicate_pid TARGET_PID_LIST[@] actual_debugged_process_pids[@] actual_running_gdb_pids[@] actual_debugged_process_names[@]; then
+                    echo -e "$ERROR Please run the following command first: mGDB-client stop -t $session_datetime"
+                    exit 1
+                fi
+            fi
+            if [[ ${#TARGET_TID_LIST[@]} -ne 0 ]]; then
+                if has_duplicate_pid TARGET_TID_LIST[@] actual_debugged_process_pids[@] actual_running_gdb_pids[@] actual_debugged_process_names[@]; then
+                    echo -e "$ERROR Please run the following command first: mGDB-client stop -t $session_datetime"
+                    exit 1
+                fi
+            fi
+        fi
+    done
+    return 0
+}
+
+# Stop Action Functions
+function stop_session {
+
+    local session_datetime="$1"
+
+    if [[ ! -d $DATABASE_DIR || -z $(ls -A "$DATABASE_DIR") ]]; then
+        echo -e "$ERROR There are currently no gdb sessions running!"
+        return 1
+    fi
+    
+    reference_file="$DATABASE_DIR/$session_datetime/sessions.txt"
+    if [[ ! -f $reference_file ]]; then
+        echo -e "$ERROR The given session datetime (${session_datetime}) does not exist!"
+        echo -e "$ERROR Please run 'show_sessions.sh' to see a list of current sessions."
+        return 1
+    fi
+
+    gdb_pids=()
+    process_pids=()
+    process_names=()
+    while IFS=',' read -r gdb_pid process_pid process_name; do
+        gdb_pids+=("$gdb_pid")
+        process_pids+=("$process_pid")
+        process_names+=("$process_name")
+    done < "$reference_file"
+
+    actual_running_gdb_pids=()
+	actual_debugged_process_pids=()
+	actual_debugged_process_names=()
+	for i in "${!gdb_pids[@]}"; do
+        ps "${gdb_pids[$i]}" > /dev/null 2>&1
+		if [[ $? -eq 0 ]]; then
+			actual_running_gdb_pids+=("${gdb_pids[$i]}")
+			actual_debugged_process_pids+=("${process_pids[$i]}")
+			actual_debugged_process_names+=("${process_names[$i]}")
+		else
+			# Check if the debugged processes died
+			ps "${process_pids[$i]}" > /dev/null 2>&1
+			if [[ $? -ne 0 ]]; then
+				echo -e "$WARNING gdb (${gdb_pids[$i]}) no longer exist as ${process_names[$i]} (${process_pids[$i]}) exited or crashed."
+
+			# If the debugged process didn't die, it means that the gdb script exited early.
+			else
+				echo -e "$WARNING gdb (${gdb_pids[$i]}) is already detached from ${process_names[$i]} (${process_pids[$i]}) as the gdb script exited early."
+			fi
+		fi
+	done
+
+	if [[ ${#actual_running_gdb_pids[@]} -eq 0 ]]; then
+		echo -e "$WARNING There are currently no gdb processes in this session datetime: $session_datetime"
+		rm -rf "$DATABASE_DIR/$session_datetime"
+		echo -e "$INFO Removed session $session_datetime in database."
+		return 0
+	fi
+
+    remaining_gdb_pids=()
+	remaining_debugged_process_pids=()
+	remaining_debugged_process_names=()
+	for i in "${!actual_running_gdb_pids[@]}"; do
+		kill -s SIGINT "${actual_running_gdb_pids[$i]}"
+		if [[ $? -ne 0 ]]; then
+			echo -e "$ERROR Unable to detach gdb (${actual_running_gdb_pids[$i]}) from ${actual_debugged_process_names[$i]} (${actual_debugged_process_pids[$i]})!"
+			remaining_gdb_pids+=("${actual_running_gdb_pids[$i]}")
+			remaining_debugged_process_pids+=("${actual_debugged_process_pids[$i]}")
+			remaining_debugged_process_names+=("${actual_debugged_process_names[$i]}")
+		else
+			echo -e "$INFO Detached gdb (${actual_running_gdb_pids[$i]}) from ${actual_debugged_process_names[$i]} (${actual_debugged_process_pids[$i]})"
+		fi
+	done
+    # If there are still gdb processes within the session that are still hooking onto the target processes, then update the sessions.txt file.
+	if [[ ${#remaining_gdb_pids[@]} -ne 0 ]]; then
+		echo -e "$WARNING Unable to fully kill off all gdb processes within session $session_datetime!"
+		echo "Remaining gdb PIDS:" "${remaining_gdb_pids[@]}"
+		rm "$reference_file"
+		for i in "${!remaining_gdb_pids[@]}"; do
+			echo "${remaining_gdb_pids[$i]},${remaining_debugged_process_pids[$i]},${remaining_debugged_process_names[$i]}" >> "$reference_file"
+		done
+		echo -e "$INFO Updated session $session_datetime in database."
+		echo -e "$WARNING Either run this script again or manually type the command: kill -s SIGINT [gdb pid]"
+		return 0
+
+	# If all gdb processes has been detached from the target processes successfully, then we delete the whole sessions datetime directory.
+	else
+		rm -rf "$DATABASE_DIR/$session_datetime"
+		echo -e "$INFO Removed session $session_datetime in database."
+        echo ""
+	fi
+  return 0
+}
+
+function stop_all_sessions {
+
+    if [[ -z $(ls -A "$DATABASE_DIR") ]]; then
+        echo -e "$ERROR There are no currently no sessions!"
+        return 1
+    fi
+
+    for session_datetime_dir in "$CURR_DIR/database"/*; do
+        if [[ ! -d "$session_datetime_dir" ]]; then
+            continue
+        fi
+        TARGET_SESSION_DATETIME=$(basename "$session_datetime_dir")
+        echo -e "$INFO Detaching all gdb processes in session $TARGET_SESSION_DATETIME..."
+        stop_session "$TARGET_SESSION_DATETIME"
+    done
+  return 0
+}
+
+function stop_global {
+    stop_all_sessions
+    # Check for gdb processes outside of known database
+    other_gdb_processes=($(pidof gdb))
+    if [[ "${#other_gdb_processes[@]}" -eq 0 ]];then
+        echo -e "$ERROR There are no gdb processes outside of known database."
+    else
+        echo -e "$INFO Found other gdb processes outside of database:" "${other_gdb_processes[@]}"
+        echo -e "$INFO Detaching these gdb processes..."
+
+        # Try SIGHUP First
+        kill -s SIGHUP "${other_gdb_processes[@]}"
+        other_gdb_processes=($(pidof gdb))
+        if [[ "${#other_gdb_processes[@]}" -eq 0 ]];then
+            echo -e "$INFO Global reset complete!"
+            return 0
+        fi
+        # If it didn't work, try SIGINT
+        kill -s SIGINT "${other_gdb_processes[@]}"
+        other_gdb_processes=($(pidof gdb))
+        if [[ "${#other_gdb_processes[@]}" -eq 0 ]];then
+            echo -e "$INFO Global reset complete!"
+            return 0
+        fi
+        # If it didn't work, try SIGKILL (WARNING - May end up causing a seg fault or core dump on debugged process)
+        kill -s SIGKILL "${other_gdb_processes[@]}"
+        other_gdb_processes=($(pidof gdb))
+        if [[ "${#other_gdb_processes[@]}" -eq 0 ]];then
+            echo -e "$INFO Global reset complete!"
+            return 0
+        fi
+    fi
+}
+
+function pretty_print_show_session {
+
+    local session_datetime="$1"
+    reference_file="$DATABASE_DIR/$session_datetime/sessions.txt"
+    arguments_file="$DATABASE_DIR/$session_datetime/arguments.txt"
+
+    gdb_pids=()
+	process_pids=()
+	process_names=()
+    while IFS=',' read -r gdb_pid process_pid process_name; do
+        gdb_pids+=("$gdb_pid")
+        process_pids+=("$process_pid")
+        process_names+=("$process_name")
+    done < "$reference_file"
+
+    printf "%-20s | " "$session_datetime"
+    printf "%s\n" "$(cat "$arguments_file")"
+
+}
+
+function pretty_print_show_all_sessions {
+
+    if [[ -z $(ls -A "$DATABASE_DIR") ]]; then
+        echo -e "$ERROR There are no currently no sessions!"
+        exit 1
+    fi
+
+    echo ""
+	echo -e "$INFO Current Sessions:"
+	printf "%-20s | %s\n" "Session" "Arguments"
+	printf "%-20s | %s\n" "--------------------" "--------------------------------------------------"
+    for session_datetime_dir in "$CURR_DIR/database"/*; do
+        if [[ ! -d "$session_datetime_dir" ]]; then
+            continue
+        fi
+        TARGET_SESSION_DATETIME=$(basename "$session_datetime_dir")
+        pretty_print_show_session "$TARGET_SESSION_DATETIME"
+    done
+    echo ""
+}
+
+# Function to check if a value is in the "dd-mm-yyyyTHH-MM-SS" datetime format
+function is_datetime {
+    local datetime="$1"
+    if [[ "$datetime" =~ ^[0-9]{2}-[0-9]{2}-[0-9]{4}T[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
+        return 0  # Valid datetime format
+    else
+        return 1  # Invalid datetime format
+    fi
+}
+
+# Function to check if a value is numeric
+function is_numeric {
+  local value="$1"
+  if [[ "$value" =~ ^[0-9]+$ ]]; then
+      return 0  # Numeric
+  else
+      return 1  # Not numeric
+  fi
+}
+
+# Function to check if a string is a valid float
+function is_float {
+  if [[ $1 =~ ^([0-9]+([.][0-9]*)?|[.][0-9]+)$ ]]; then
+    return 0 # FLoat
+  else
+    return 1 # Not Float
+  fi
+}
+
+function usage {
+    case "$action" in 
+        start)
+            echo "Usage: `basename $0` start [ -h ] ( -n | -l ) -s [ -w ] [ -d ]"
+            printf "%-30s  %-40s\n" "  -h  | --help" "Show this help message and exit"
+            printf "%-30s  %-40s\n" "  -n  | --process-name" "The name of the process(es)"
+            printf "%-30s  %-40s\n" "  -l  | --pid-list" "A list of pids"
+            printf "%-30s  %-40s\n" "  -pp | --parent-pid" "The parent PID (used in conjunction with -t | --tid-list)"
+            printf "%-30s  %-40s\n" "  -t  | --tid-list" "A list of tids (used in conjunction with -pp | --parent-pid)"
+            printf "%-30s  %-40s\n" "  -s  | --script" "Path to gdb script"
+            printf "%-30s  %-40s\n" "  -w  | --wait" "To wait on a process to spawn. (Only used with -n)"
+            printf "%-30s  %-40s\n" "  -d  | --delay" "Delays the gdb attcachment in seconds. (integer/float)"
+            printf "\n"
+        ;;
+        stop)
+            echo "Usage: `basename $0` stop [ -h ] ( -t | -a | -g )"
+            printf "%-30s  %-40s\n" "  -h | --help" "Show this help message and exit"
+            printf "%-30s  %-40s\n" "  -t | --session-datetime" "The gdb session identified by datetime"
+            printf "%-30s  %-40s\n" "  -a | --all" "Detaches all gdb processes from all sessions."
+            printf "%-30s  %-40s\n" "  -g | --global" "Detaches all gdb processes, including the ones not known in database."
+            printf "\n"
+        ;;
+        *)
+            echo "Usage: `basename $0` [action] [options]"
+            printf "Available actions:\n"
+            printf "%-10s  %-40s\n" "  start" "Start a GDB session"
+            printf "%-10s  %-40s\n" "  stop" "Stop one or more GDB sessions"
+            printf "%-10s  %-40s\n" "  show" "Show all GDB sessions"
+            printf "%-10s  %-40s\n" "  version" "Show the current version of mGDB"
+            printf "\n"
+        ;;
+    esac
+}
+
+
+# Check UID
+if [[ $EUID -ne 0 ]]; then
+	echo -e "$ERROR Please run this script as root!"
+	exit 1
+fi
+
+# Initialize action-specific options
+start_h_option=false
+start_n_option=false
+start_l_option=false
+start_pp_option=false
+start_t_option=false
+start_s_option=false
+start_w_option=false
+start_d_option=false
+
+stop_h_option=false
+stop_t_option=false
+stop_a_option=false
+stop_g_option=false
+
+# Initialize other globals
+GDB_PATH="/usr/bin/gdb"
+CURR_DIR=$(dirname "$(realpath "$0")")
+CURR_DATETIME=`date +"%d-%m-%YT%H-%M-%S"`
+LOGS_DIR=$CURR_DIR/logs/$CURR_DATETIME
+DATABASE_DIR=$CURR_DIR/database
+GDB_SCRIPT=""
+DELAY_TIME=0
+TARGET_PID_LIST=()
+TARGET_PROCESS_NAME_LIST=()
+TARGET_PARENT_PID=0
+TARGET_TID_LIST=()
+LATEST_SESSION_FILE="$DATABASE_DIR/$CURR_DATETIME/sessions.txt"
+GDB_PID_LIST=()
+TARGET_SESSION_DATETIME=""
+
+action=$1
+arguments=""
+case "$1" in
+    start)
+        shift
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                -n|--process-name)
+                    if [[ -z "$2" || "$2" =~ ^- ]]; then
+                        echo -e "$ERROR (-n | --process-name) No process name was given at all!"
+                        usage
+                        exit 1
+                    fi
+                    arguments+="$1 $2 "
+                    start_n_option=true
+                    PROCESS_NAME=$2
+                    shift 2
+                ;;
+                -l|--pid-list)
+                    if [[ -z "$2" || "$2" =~ ^- ]]; then
+                        echo -e "$ERROR (-l | --pid-list) No PIDs were given at all!"
+                        usage
+                        exit 1
+                    fi
+                    arguments+="$1 "
+                    start_l_option=true
+                    shift
+                    while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
+                    if ! is_numeric "$1"; then
+                        echo -e "$ERROR (-l | --pid-list) Expected numeric PID but got '$1' instead!"
+                        usage
+                        exit 1
+                    fi
+                    TARGET_PID_LIST+=("$1")
+                    arguments+="$1 "
+                    shift
+                    done
+                ;;
+                -pp|--parent-pid)
+                    if [[ -z "$2" || "$2" =~ ^- ]]; then
+                        echo -e "$ERROR (-pp | --parent-pid) No parent PID was given at all!"
+                        usage
+                        exit 1
+                    fi
+                    arguments+="$1 $2 "
+                    start_pp_option=true
+                    TARGET_PARENT_PID=$2
+                    shift 2
+                ;;
+                -t|--tid-list)
+                    if [[ -z "$2" || "$2" =~ ^- ]]; then
+                        echo -e "$ERROR (-t | --tid-list) No TIDs were given at all!"
+                        usage
+                        exit 1
+                    fi
+                    arguments+="$1 "
+                    start_t_option=true
+                    shift
+                    while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
+                    if ! is_numeric "$1"; then
+                        echo -e "$ERROR (-l | --pid-list) Expected numeric PID but got '$1' instead!"
+                        usage
+                        exit 1
+                    fi
+                    TARGET_TID_LIST+=("$1")
+                    arguments+="$1 "
+                    shift
+                    done
+                ;;
+                -s|--script)
+                    if [[ -z "$2" || "$2" =~ ^- ]]; then
+                        echo -e "$ERROR (-s | --script) No gdb script path was provided!"
+                        usage
+                        exit 1
+                    fi
+                    arguments+="$1 $2 "
+                    start_s_option=true
+                    GDB_SCRIPT="$2"
+                    shift 2
+                ;;
+                -w|--wait)
+                    arguments+="$1 "
+                    start_w_option=true
+                    shift
+                ;;
+                -d|--delay)
+                    arguments+="$1 $2 "
+                    start_d_option=true
+                    DELAY_TIME="$2"
+                    shift 2
+                ;;
+                -h|--help)
+                    start_h_option=true
+                    shift
+                ;;
+                *)
+                    echo -e "${ERROR} Invalid argument specifier '$1'! Please refer to usage!"
+                    usage
+                    exit 1
+                ;;
+            esac
+        done
+        # Check if -h is specified, regardless of other options
+        if [ "$start_h_option" = true ]; then
+            usage
+            exit 0
+        fi
+
+        # Check that either -n or -l is specified, but not both
+        if [[ "$start_n_option" = true && "$start_l_option" = true ]]; then
+            echo -e "$ERROR -n (--process-name) and -l (--pid-list) are mutually exclusive options."
+            usage
+            exit 1
+        fi
+
+        # Check that either -n or -pp is specified, but not both
+        if [[ "$start_n_option" = true && "$start_pp_option" = true ]]; then
+            echo -e "$ERROR -n (--process-name) and -pp (--parent-pid) are mutually exclusive options."
+            usage
+            exit 1
+        fi
+
+        # Check that either -l or -pp is specified, but not both
+        if [[ "$start_l_option" = true && "$start_pp_option" = true ]]; then
+            echo -e "$ERROR -l (--pid-list) and -pp (--parent-pid) are mutually exclusive options."
+            usage
+            exit 1
+        fi
+
+        # Check that 1 of the main option is specified
+        if [[ "$start_n_option" = false && "$start_l_option" = false && "$start_pp_option" = false ]]; then
+            echo -e "$ERROR Either -n (--process-name), -l (--pid-list) or -pp (--parent-pid) must be specified."
+            usage
+            exit 1
+        fi
+
+        # Check that -pp is always paired with -t
+        if [[ "$start_pp_option" = false && "$start_t_option" = true ]]; then
+            echo -e "$ERROR -t (--tid-list) must be used with -p (--parent-pid)."
+            usage
+            exit 1
+        fi
+        if [[ "$start_pp_option" = true && "$start_t_option" = false ]]; then
+            echo -e "$ERROR -p (--parent-pid) must be used with -t (--tid-list)."
+            echo -e "$INFO Available Thread TIDs: "$(ls /proc/$TARGET_PARENT_PID/task -1 | tail -n +2 | paste -sd " ")
+            usage
+            exit 1
+        fi
+
+        # Check that -s is specified
+        if [[ "$start_s_option" = false ]]; then
+            echo -e "$ERROR -s (--script) must be specified!"
+            usage
+            exit 1
+        fi
+
+        # Check if -w is specified, it must be with -n only
+        if [[ "$start_w_option" = true && "$start_l_option" = true ]]; then
+            echo -e "$ERROR -w (--wait) cannot be used with -l (--pid-list)"
+            usage
+            exit 1
+        fi
+        if [[ "$start_w_option" = true && "$start_pp_option" = true ]]; then
+            echo -e "$ERROR -w (--wait) cannot be used with -pp (--parent-pid)"
+            usage
+            exit 1
+        fi
+
+        # Check if -d is specified
+        if [[ "$start_d_option" = true ]]; then
+            if ! is_numeric $DELAY_TIME && ! is_float $DELAY_TIME; then
+                echo -e "$ERROR -d (--delay) expected an integer or float but got something else instead!"
+                usage
+                exit 1
+            fi
+        fi
+
+        if [[ "$start_n_option" = true && "$start_l_option" = false && "$start_w_option" = false ]]; then
+            TARGET_PID_LIST=($(pidof $PROCESS_NAME))
+        elif [[ "$start_n_option" = true && "$start_l_option" = false && "$start_w_option" = true ]]; then
+            echo -e "$INFO Waiting for $PROCESS_NAME to spawn..."
+            while true
+            do
+                TARGET_PID_LIST=($(pidof $PROCESS_NAME))
+                if [[ -n "$TARGET_PID_LIST" ]]; then
+                echo -e "$INFO Found $PROCESS_NAME:" "${TARGET_PID_LIST[@]}"
+                break
+                fi
+            done
+        fi
+
+        # Sanity check for all user arguments
+        check_start_options
+
+        # Setting up environment
+        mkdir -p $LOGS_DIR/gdb_output
+        mkdir -p $DATABASE_DIR/$CURR_DATETIME
+
+        start_session
+    ;;
+    stop)
+        shift
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                -t|--session-datetime)
+                    if [[ -z "$2" || "$2" =~ ^- ]]; then
+                        echo -e "$ERROR (-t | --session-datetime) No datetime was given at all!"
+                        usage
+                        exit 1
+                    fi
+                    if ! is_datetime "$2"; then
+                        echo -e "${ERROR} (-t | --session-datetime) Expected 'dd-mm-yyyyTHH-MM-SS' but received invalid datetime format!"
+                        exit 1
+                    fi
+                    stop_t_option=true
+                    TARGET_SESSION_DATETIME="$2"
+                    shift 2
+                ;;
+                -a|--all)
+                    stop_a_option=true
+                    shift
+                ;;
+                -g|--global)
+                    stop_g_option=true
+                    shift
+                ;;
+                -h|--help)
+                    stop_h_option=true
+                    shift
+                ;;
+                *)
+                    echo -e "${ERROR} Invalid argument specifier! Please refer to usage!"
+                    usage
+                    exit 1
+                ;;
+            esac
+        done
+        # Check if -h is specified, regardless of other options
+        if [ "$stop_h_option" = true ]; then
+            usage
+            exit 1
+        fi
+
+        # Check that at least one option is specified
+        if [[ "$stop_t_option" = false && "$stop_a_option" = false && "$stop_g_option" = false ]]; then
+            echo -e "$ERROR Either -t (--session-datetime), -a (--all) or g (--global) must be specified."
+            usage
+            exit 1
+        fi
+
+        # Check that -t, -a and -g are mutually exclusive
+        if [[ "$stop_t_option" = true && "$stop_a_option" = true &&  "$stop_g_option" = false ]]; then
+            echo -e "$ERROR -t (--session-datetime) and -a (--all) are mutually exclusive options."
+            usage
+            exit 1
+        fi
+        if [[ "$stop_t_option" = true && "$stop_a_option" = false &&  "$stop_g_option" = true ]]; then
+            echo -e "$ERROR -t (--session-datetime) and -g (--global) are mutually exclusive options."
+            usage
+            exit 1
+        fi
+        if [[ "$stop_t_option" = false && "$stop_a_option" = true &&  "$stop_g_option" = true ]]; then
+            echo -e "$ERROR -a (--all) and -g (--global) are mutually exclusive options."
+            usage
+            exit 1
+        fi
+        if [[ "$stop_t_option" = true && "$stop_a_option" = true &&  "$stop_g_option" = true ]]; then
+            echo -e "$ERROR -t (--session-datetime),-a (--all) and -g (--global) are mutually exclusive options."
+            usage
+            exit 1
+        fi
+
+        # Entry point
+        if [[ "$stop_t_option" = true && "$stop_a_option" = false && "$stop_g_option" = false ]]; then
+            stop_session "$TARGET_SESSION_DATETIME"
+        elif [[  "$stop_t_option" = false && "$stop_a_option" = true && "$stop_g_option" = false ]]; then
+            stop_all_sessions
+        elif [[  "$stop_t_option" = false && "$stop_a_option" = false && "$stop_g_option" = true ]]; then
+            stop_global
+        fi
+    ;;
+    show)
+        pretty_print_show_all_sessions
+    ;;
+    version)
+        echo "mGDB `cat $CURR_DIR/VERSION`"
+    ;;
+    *)
+        echo -e "${ERROR} Invalid action!"
+        usage
+        exit 1
+    ;;
+esac

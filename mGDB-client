@@ -54,8 +54,17 @@ function start_session {
     if [[ "$start_n_option" = true || "$start_l_option" = true ]]; then
         for pid in "${TARGET_PID_LIST[@]}"; do
             PROCESS_NAME=$(ps -p "$pid" -o comm=)
-            $GDB_PATH --batch --command=$GDB_SCRIPT -p $pid > $LOGS_DIR/gdb_output/"$pid"_"$PROCESS_NAME".log 2>&1 &
-
+            $GDB_PATH \
+            -ex "printf \"\n\e[1mIf you see a warning about libthread_db not matching inferior's thread library, you can ignore it if you are using the static gdb binaries\e[0m\n\n\"" \
+            -ex "set confirm off" \
+            -ex "set pag off" \
+            -ex "set print pretty on" \
+            -ex "set output-radix 16" \
+            -ex "set disassembly-flavor intel" \
+            -ex "set print elements 0" \
+            --command=$GDB_SCRIPT \
+            -p $pid \
+            > $LOGS_DIR/gdb_output/"$pid"_"$PROCESS_NAME".log 2>&1 &
             gdb_pid=$!
             if [[ $? -ne 0 ]]; then
                 echo -e "$ERROR Error in attaching gdb to $PROCESS_NAME($pid)"
@@ -73,8 +82,17 @@ function start_session {
     elif [[ "$start_pp_option" = true && "$start_t_option" = true ]]; then
         PROCESS_NAME=$(ps -p "${TARGET_PARENT_PID}" -o comm=)
         for tid in "${TARGET_TID_LIST[@]}"; do
-        $GDB_PATH --batch --command=$GDB_SCRIPT -p $tid > $LOGS_DIR/gdb_output/thread_"$tid"_"$PROCESS_NAME".log 2>&1 &
-        gdb_pid=$!
+            $GDB_PATH \
+            -ex "printf \"\n\e[1mIf you see a warning about libthread_db not matching inferior's thread library, you can ignore it if you are using the static gdb binaries\e[0m\n\n\"" \
+            -ex "set confirm off" \
+            -ex "set pag off" \
+            -ex "set print pretty on" \
+            -ex "set output-radix 16" \
+            -ex "set disassembly-flavor intel" \
+            -ex "set print elements 0" \
+            --command=$GDB_SCRIPT \ 
+            -p $tid > $LOGS_DIR/gdb_output/thread_"$tid"_"$PROCESS_NAME".log 2>&1 &
+            gdb_pid=$!
         if [[ $? -ne 0 ]]; then
             echo -e "$ERROR Error in attaching gdb to thread $tid of $PROCESS_NAME($TARGET_PARENT_PID)"
         else
@@ -132,7 +150,13 @@ function has_duplicate_pid {
 
 function check_start_options {
 
-  # if gdb script does not exist, exit 1
+    if [[ ! -f $GDB_PATH ]]; then
+        echo -e "${ERROR} ${GDB_PATH} does not exist!"
+        echo -e "${ERROR} To use statically compiled gdb binary: export GDB_PATH=${CURR_DIR}/static_gdb/<VERSION>/<ARCH>/gdb"
+        exit 1
+    fi
+
+    # if gdb script does not exist, exit 1
     if [[ ! -f $GDB_SCRIPT ]]; then
         echo -e "$ERROR gdb script does not exist: $GDB_SCRIPT"
 		exit 1
@@ -332,7 +356,8 @@ function stop_all_sessions {
 function stop_global {
     stop_all_sessions
     # Check for gdb processes outside of known database
-    other_gdb_processes=($(pidof gdb))
+    local gdb_basename=`basename $GDB_PATH`
+    other_gdb_processes=($(pidof $gdb_basename))
     if [[ "${#other_gdb_processes[@]}" -eq 0 ]];then
         echo -e "$ERROR There are no gdb processes outside of known database."
     else
@@ -341,21 +366,21 @@ function stop_global {
 
         # Try SIGHUP First
         kill -s SIGHUP "${other_gdb_processes[@]}"
-        other_gdb_processes=($(pidof gdb))
+        other_gdb_processes=($(pidof $gdb_basename))
         if [[ "${#other_gdb_processes[@]}" -eq 0 ]];then
             echo -e "$INFO Global reset complete!"
             return 0
         fi
         # If it didn't work, try SIGINT
         kill -s SIGINT "${other_gdb_processes[@]}"
-        other_gdb_processes=($(pidof gdb))
+        other_gdb_processes=($(pidof $gdb_basename))
         if [[ "${#other_gdb_processes[@]}" -eq 0 ]];then
             echo -e "$INFO Global reset complete!"
             return 0
         fi
         # If it didn't work, try SIGKILL (WARNING - May end up causing a seg fault or core dump on debugged process)
         kill -s SIGKILL "${other_gdb_processes[@]}"
-        other_gdb_processes=($(pidof gdb))
+        other_gdb_processes=($(pidof $gdb_basename))
         if [[ "${#other_gdb_processes[@]}" -eq 0 ]];then
             echo -e "$INFO Global reset complete!"
             return 0
@@ -490,7 +515,6 @@ stop_a_option=false
 stop_g_option=false
 
 # Initialize other globals
-GDB_PATH="/usr/bin/gdb"
 CURR_DIR=$(dirname "$(realpath "$0")")
 CURR_DATETIME=`date +"%d-%m-%YT%H-%M-%S"`
 LOGS_DIR=$CURR_DIR/logs/$CURR_DATETIME
@@ -504,6 +528,9 @@ TARGET_TID_LIST=()
 LATEST_SESSION_FILE="$DATABASE_DIR/$CURR_DATETIME/sessions.txt"
 GDB_PID_LIST=()
 TARGET_SESSION_DATETIME=""
+if [[ -z ${GDB_PATH+x} ]]; then
+    GDB_PATH="/usr/bin/gdb"
+fi
 
 action=$1
 arguments=""
@@ -565,7 +592,7 @@ case "$1" in
                     shift
                     while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
                     if ! is_numeric "$1"; then
-                        echo -e "$ERROR (-l | --pid-list) Expected numeric PID but got '$1' instead!"
+                        echo -e "$ERROR (-l | --pid-list) Expected numeric TID but got '$1' instead!"
                         usage
                         exit 1
                     fi

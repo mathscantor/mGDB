@@ -1,11 +1,3 @@
-set confirm off
-set pag off
-set print pretty on
-set output-radix 16
-set disassembly-flavor intel
-set print elements 0
-set cwd .
-
 source gdb_scripts/py_commands/strlen.py
 source gdb_scripts/py_commands/get_base_addr.py
 source gdb_scripts/py_commands/load_library_symbol.py
